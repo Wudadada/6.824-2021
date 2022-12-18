@@ -218,6 +218,7 @@ func (rf *Raft) BroadcastAppendEntries(isHeartBeat bool) {
 		successPeers := 1
 
 		Debug(dTest, "S%d bf for peer", rf.me)
+		voteCh := make(chan bool, len(rf.peers)-1)
 		for peer := range rf.peers {
 			if peer == rf.me {
 				continue
@@ -228,52 +229,62 @@ func (rf *Raft) BroadcastAppendEntries(isHeartBeat bool) {
 			//发送AppendEntries,如果日志一致性检查失败（缺少日志），重新发送,直到Follower返回success
 			response := new(AppendEntriesReply)
 			Debug(dTest, "S%d gofunc begin", peer)
-			rf.rlock("BroadcastAppendEntries")
-			request.PrevLogIndex = rf.nextIndex[peer] - 1
-			request.PrevLogTerm = rf.logs[request.PrevLogIndex].Term
-			if rf.nextIndex[peer] <= rf.getLastLogIndex() {
-				request.Entries = rf.logs[rf.nextIndex[peer]:]
-			}
-			Debug(dDrop, "S%d -> S%d send Entries index:%d  in T%d", rf.me, peer, rf.nextIndex[peer], rf.currentTerm)
-			rf.runlock("BroadcastAppendEntries")
-
-			rf.sendAppendEntries(peer, request, response)
-
-			for response.Success == false && len(request.Entries) != 0 { //如果是日志复制失败
-				rf.nextIndex[peer]-- //需要发送的日志位置向前移动一位
-
-				//重新生成需要发送的日志
-				request.PrevLogIndex = rf.nextIndex[peer]
-				var tmpEntry LogEntry
-				request.Entries = append(request.Entries, tmpEntry)
-				copy(request.Entries[1:], request.Entries[0:])
-				tmpEntry = rf.logs[rf.nextIndex[peer]]
-				request.Entries[0] = tmpEntry
-
-				Debug(dLeader, "S%d -> S%d retry Entries index:%d in T%d", rf.me, peer, rf.nextIndex[peer], rf.currentTerm)
+			go func(peer int) {
+				rf.rlock("BroadcastAppendEntries")
+				request.PrevLogIndex = rf.nextIndex[peer] - 1
+				request.PrevLogTerm = rf.logs[request.PrevLogIndex].Term
+				if rf.nextIndex[peer] <= rf.getLastLogIndex() {
+					request.Entries = rf.logs[rf.nextIndex[peer]:]
+				}
+				Debug(dDrop, "S%d -> S%d send Entries index:%d  in T%d", rf.me, peer, rf.nextIndex[peer], rf.currentTerm)
+				rf.runlock("BroadcastAppendEntries")
 
 				rf.sendAppendEntries(peer, request, response)
-			}
 
-			rf.lock("BroadcastAppendEntries")
-			if response.Success {
-				successPeers++
-				Debug(dTest, "S%d response true", peer)
-				rf.nextIndex[peer] = rf.getLastLogIndex() + 1
-				rf.matchIndex[peer] = rf.nextIndex[peer] - 1
-				Debug(dLeader, "S%d  T%d BoardcastAppendEntries, response and nextIndex[%d]:%d, matchIndex[%d]:%d ", rf.me, rf.currentTerm, peer, rf.nextIndex[peer], peer, rf.matchIndex[peer])
-			}
-			rf.unlock("BroadcastAppendEntries")
-			Debug(dTest, "S%d gofunc end", peer)
+				for response.Success == false && len(request.Entries) != 0 { //如果是日志复制失败
+					rf.nextIndex[peer]-- //需要发送的日志位置向前移动一位
 
-			Debug(dTest, "S%d aft gofunc", peer)
+					//重新生成需要发送的日志
+					request.PrevLogIndex = rf.nextIndex[peer]
+					var tmpEntry LogEntry
+					request.Entries = append(request.Entries, tmpEntry)
+					copy(request.Entries[1:], request.Entries[0:])
+					tmpEntry = rf.logs[rf.nextIndex[peer]]
+					request.Entries[0] = tmpEntry
+
+					Debug(dLeader, "S%d -> S%d retry Entries index:%d in T%d", rf.me, peer, rf.nextIndex[peer], rf.currentTerm)
+
+					rf.sendAppendEntries(peer, request, response)
+				}
+
+				rf.lock("BroadcastAppendEntries")
+				if response.Success {
+					voteCh <- true
+					Debug(dTest, "S%d response true", peer)
+					rf.nextIndex[peer] = rf.getLastLogIndex() + 1
+					rf.matchIndex[peer] = rf.nextIndex[peer] - 1
+					Debug(dLeader, "S%d  T%d BoardcastAppendEntries, response and nextIndex[%d]:%d, matchIndex[%d]:%d ", rf.me, rf.currentTerm, peer, rf.nextIndex[peer], peer, rf.matchIndex[peer])
+				}
+				rf.unlock("BroadcastAppendEntries")
+				Debug(dTest, "S%d gofunc end", peer)
+
+				Debug(dTest, "S%d aft gofunc", peer)
+			}(peer)
 		}
 		Debug(dTest, "S%d aft for peer", rf.me)
 
-		Debug(dTest, "S%d successPeers:%d in T%d", rf.me, successPeers, rf.currentTerm)
-		if successPeers > totalPeers/2 {
-			rf.applierCh <- struct{}{}
+		for voteGranted := range voteCh {
+			if voteGranted {
+				successPeers++
+				if successPeers > totalPeers/2 {
+					rf.applierCh <- struct{}{}
+					return
+				}
+			}
 		}
+
+		Debug(dTest, "S%d successPeers:%d in T%d", rf.me, successPeers, rf.currentTerm)
+
 	}
 
 	Debug(dLeader, "S%d reset heartbeatTimer in T%d", rf.me, rf.currentTerm)
