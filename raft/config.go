@@ -230,13 +230,11 @@ func (cfg *config) applierSnap(i int, applyCh chan ApplyMsg) {
 	}
 }
 
-//
 // start or re-start a Raft.
 // if one already exists, "kill" it first.
 // allocate new outgoing port file names, and a new
 // state persister, to isolate previous instance of
 // this server. since we cannot really kill it.
-//
 func (cfg *config) start1(i int, applier func(int, chan ApplyMsg)) {
 	cfg.crash1(i)
 
@@ -451,6 +449,7 @@ func (cfg *config) nCommitted(index int) (int, interface{}) {
 			cmd = cmd1
 		}
 	}
+	//fmt.Println("count:", count, "cmd:", cmd)
 	return count, cmd
 }
 
@@ -502,17 +501,24 @@ func (cfg *config) one(cmd interface{}, expectedServers int, retry bool) int {
 	starts := 0
 	for time.Since(t0).Seconds() < 10 {
 		// try all the servers, maybe one is the leader.
+		Debug(dTest, "gggggggggggg")
 		index := -1
 		for si := 0; si < cfg.n; si++ {
+			Debug(dTest, "hhhh")
 			starts = (starts + 1) % cfg.n
 			var rf *Raft
 			cfg.mu.Lock()
 			if cfg.connected[starts] {
 				rf = cfg.rafts[starts]
 			}
+			Debug(dTest, "jjjjjjj")
 			cfg.mu.Unlock()
+			Debug(dTest, "kkkkkkkkkkkkkkkkkk")
+
 			if rf != nil {
+				Debug(dTest, "lllllllllllllllll")
 				index1, _, ok := rf.Start(cmd)
+				Debug(dTest, "mmmmmmmmmmm")
 				if ok {
 					index = index1
 					break
@@ -526,6 +532,7 @@ func (cfg *config) one(cmd interface{}, expectedServers int, retry bool) int {
 			t1 := time.Now()
 			for time.Since(t1).Seconds() < 2 {
 				nd, cmd1 := cfg.nCommitted(index)
+				//fmt.Println("index: ", index, " nd: ", nd)
 				if nd > 0 && nd >= expectedServers {
 					// committed
 					if cmd1 == cmd {
