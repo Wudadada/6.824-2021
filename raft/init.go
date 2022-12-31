@@ -101,8 +101,8 @@ func Make(peers []*labrpc.ClientEnd, me int,
 		rf.matchIndex[i], rf.nextIndex[i] = 0, 1
 	}
 
-	// start ticker goroutine to start elections
 	go rf.ticker()
+	go rf.applier()
 
 	return rf
 }
@@ -135,8 +135,10 @@ type AppendEntriesArgs struct {
 }
 
 type AppendEntriesReply struct {
-	Term    int
-	Success bool
+	Term          int
+	Success       bool
+	ConflictTerm  int
+	ConflictIndex int
 }
 
 type LogEntry struct {
@@ -158,6 +160,8 @@ type LogEntry struct {
 // Term. the third return value is true if this server believes it is
 // the leader.
 func (rf *Raft) Start(command interface{}) (int, int, bool) {
+	rf.lock("start")
+	defer rf.unlock("start")
 	// Your code here (2B).
 	if rf.state != LEADER {
 		return -1, -1, false
@@ -168,7 +172,6 @@ func (rf *Raft) Start(command interface{}) (int, int, bool) {
 			fmt.Println("Start数组越界")
 		}
 	}()*/
-	rf.lock("start")
 	term := rf.currentTerm
 	index := len(rf.logs)
 	rf.logs = append(rf.logs,
@@ -178,14 +181,11 @@ func (rf *Raft) Start(command interface{}) (int, int, bool) {
 			Command: command,
 		},
 	)
-	rf.commitIndex++
-	isLeader := true
-	Debug(dDrop, "S%d, commit log, log index=%v, log term=%v, log command=%v", rf.me, index, term, command)
-	rf.unlock("start")
 
-	//进入bc后出不来 22点31分
-	rf.BroadcastAppendEntries(false)
-	Debug(dTest, "zzzzzzzzzzzzzzzzz")
+	isLeader := true
+	Debug(dDrop, "S%d new log index=%v, log term=%v, log command=%v", rf.me, index, term, command)
+
+	rf.sendAppendsL(false)
 
 	return index, term, isLeader
 }

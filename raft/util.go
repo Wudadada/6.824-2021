@@ -15,11 +15,11 @@ func randomElectionTimeout() time.Duration {
 	return time.Duration(rand.Intn(200)+500) * time.Millisecond //从毫秒区间[500,700]中随机选取
 }
 
-func (rf *Raft) getLastLog() LogEntry {
+func (rf *Raft) LastLog() LogEntry {
 	return rf.logs[len(rf.logs)-1]
 }
 
-func (rf *Raft) getLastLogIndex() int {
+func (rf *Raft) LastLogIndex() int {
 	return len(rf.logs) - 1
 }
 
@@ -43,6 +43,13 @@ func (rf *Raft) runlock(where string) {
 	rf.mu.RUnlock()
 }
 
+func min(x int, y int) int {
+	if x >= y {
+		return y
+	}
+	return x
+}
+
 // the tester doesn't halt goroutines created by Raft after each test,
 // but it does call the Kill() method. your code can use killed() to
 // check whether Kill() has been called. the use of atomic avoids the
@@ -56,3 +63,12 @@ func (rf *Raft) Kill() {
 	atomic.StoreInt32(&rf.dead, 1)
 
 }
+
+/*
+	defer func() {
+		if r := recover(); r != nil {
+			// 处理越界错误
+			fmt.Println("BroadcastAppendEntries数组越界")
+		}
+	}()
+*/

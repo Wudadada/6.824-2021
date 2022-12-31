@@ -501,24 +501,23 @@ func (cfg *config) one(cmd interface{}, expectedServers int, retry bool) int {
 	starts := 0
 	for time.Since(t0).Seconds() < 10 {
 		// try all the servers, maybe one is the leader.
-		Debug(dTest, "gggggggggggg")
+
 		index := -1
 		for si := 0; si < cfg.n; si++ {
-			Debug(dTest, "hhhh")
+
 			starts = (starts + 1) % cfg.n
 			var rf *Raft
 			cfg.mu.Lock()
 			if cfg.connected[starts] {
 				rf = cfg.rafts[starts]
 			}
-			Debug(dTest, "jjjjjjj")
+
 			cfg.mu.Unlock()
-			Debug(dTest, "kkkkkkkkkkkkkkkkkk")
 
 			if rf != nil {
-				Debug(dTest, "lllllllllllllllll")
+
 				index1, _, ok := rf.Start(cmd)
-				Debug(dTest, "mmmmmmmmmmm")
+
 				if ok {
 					index = index1
 					break
