@@ -13,6 +13,7 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 	if args.Term > rf.currentTerm {
 		rf.currentTerm = args.Term
 		rf.votedFor = -1
+		rf.persist()
 	}
 	if rf.state != FOLLOWER {
 		rf.state = FOLLOWER
@@ -48,6 +49,7 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 			break
 		}
 	}
+	rf.persist()
 
 	if args.LeaderCommit > rf.commitIndex {
 		// If leaderCommit > commitIndex, set commitIndex = min(leaderCommit, index of last new entry)
@@ -98,15 +100,6 @@ func (rf *Raft) processAppendReplyL(peer int, args *AppendEntriesArgs, reply *Ap
 	} else if rf.currentTerm == args.Term {
 		rf.processAppendReplyTermL(peer, args, reply)
 	}
-}
-
-func (rf *Raft) newTermL(term int) {
-	Debug(dLog, "S%v newTerm %v to Follower", rf.me, term)
-	rf.currentTerm = term
-	rf.votedFor = -1
-	rf.state = FOLLOWER
-	rf.electionTimer.Reset(randomElectionTimeout())
-	rf.persist()
 }
 
 func (rf *Raft) processAppendReplyTermL(peer int, args *AppendEntriesArgs, reply *AppendEntriesReply) {

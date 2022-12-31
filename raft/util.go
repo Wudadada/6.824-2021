@@ -43,6 +43,15 @@ func (rf *Raft) runlock(where string) {
 	rf.mu.RUnlock()
 }
 
+func (rf *Raft) newTermL(term int) {
+	Debug(dLog, "S%v newTerm %v to Follower", rf.me, term)
+	rf.currentTerm = term
+	rf.votedFor = -1
+	rf.state = FOLLOWER
+	rf.electionTimer.Reset(randomElectionTimeout())
+	rf.persist()
+}
+
 func min(x int, y int) int {
 	if x >= y {
 		return y

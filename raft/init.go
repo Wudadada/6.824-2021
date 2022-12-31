@@ -181,6 +181,7 @@ func (rf *Raft) Start(command interface{}) (int, int, bool) {
 			Command: command,
 		},
 	)
+	rf.persist()
 
 	isLeader := true
 	Debug(dDrop, "S%d new log index=%v, log term=%v, log command=%v", rf.me, index, term, command)
