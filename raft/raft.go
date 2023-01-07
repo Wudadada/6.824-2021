@@ -20,6 +20,7 @@ package raft
 import (
 	"6.824/labgob"
 	"bytes"
+	"math/rand"
 	"sync/atomic"
 	"time"
 )
@@ -38,9 +39,64 @@ func (rf *Raft) sendAppendEntries(server int, args *AppendEntriesArgs, reply *Ap
 	return ok
 }
 
+func (rf *Raft) tick() {
+	rf.lock("tick")
+	defer rf.unlock("tick")
+
+	Debug(dLog, "S%d tick in T%d", rf.me, rf.currentTerm)
+
+	if rf.state == LEADER {
+		Debug(dLeader, "S%d reset election time and send heart beat in T%d", rf.me, rf.currentTerm)
+		rf.setElectionTime()
+		rf.sendAppendsL(true)
+	}
+	if time.Now().After(rf.electionTime) {
+		rf.setElectionTime()
+		rf.startElectionL()
+	}
+}
+
+func (rf *Raft) setElectionTime() {
+	t := time.Now()
+	t = t.Add(electionTimeout)
+	ms := rand.Int63() % 200
+	t = t.Add(time.Duration(ms) * time.Millisecond)
+	rf.electionTime = t
+}
+
+func (rf *Raft) ticker() {
+	for rf.killed() == false {
+		rf.tick()
+		ms := 50
+		time.Sleep(time.Duration(ms) * time.Millisecond)
+	}
+}
+
+func (rf *Raft) applier() {
+	rf.lock("applier")
+	defer rf.unlock("applier")
+
+	for rf.killed() == false {
+		if rf.lastApplied+1 <= rf.commitIndex && rf.lastApplied+1 <= rf.LastLogIndex() {
+			rf.lastApplied += 1
+			am := ApplyMsg{}
+			am.CommandValid = true
+			am.CommandIndex = rf.lastApplied
+			am.Command = rf.logs[rf.lastApplied].Command
+			Debug(dLog, "S%d apply commandindex:%d", rf.me, am.CommandIndex)
+			rf.unlock("applier")
+			rf.applyCh <- am
+			rf.lock("applier")
+		} else {
+			rf.applyCond.Wait()
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
 // The ticker go routine starts a new election if this peer hasn't received
 // heartsbeats recently.
-func (rf *Raft) ticker() {
+/*func (rf *Raft) ticker() {
 	for rf.killed() == false {
 		select {
 		case <-rf.electionTimer.C:
@@ -88,12 +144,12 @@ func (rf *Raft) applier() {
 					Command:      command,
 					CommandIndex: lastApplied + i + 1,
 				}
-				Debug(dDrop, "S%d, apply log, log index=%v, log term=%v, log command=%v", rf.me, entry.Index, entry.Term, command)
+				Debug(dDrop, "S%d, apply log, log term=%v, log command=%v", rf.me, entry.Term, command)
 			}
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
-}
+}*/
 
 // return currentTerm and whether this server
 // believes it is the leader.

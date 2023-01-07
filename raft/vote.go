@@ -28,7 +28,6 @@ func (rf *Raft) requestVote(peer int, args *RequestVoteArgs, votes *int) {
 				if rf.currentTerm == args.Term {
 					rf.becomeLeaderL()
 					rf.sendAppendsL(true)
-					rf.heartbeatTimer.Reset(StableHeartBeatTimeOut())
 				}
 			}
 		}
@@ -44,7 +43,7 @@ func (rf *Raft) becomeLeaderL() {
 }
 
 func (rf *Raft) startElectionL() {
-	rf.electionTimer.Reset(randomElectionTimeout())
+	rf.setElectionTime()
 	rf.currentTerm += 1
 	rf.state = CANDIDATE
 
@@ -77,7 +76,7 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 		rf.votedFor = args.CandidateID
 		rf.persist()
 		Debug(dLog, "S%d vote for S%d in T%d", rf.me, args.CandidateID, args.Term)
-		rf.electionTimer.Reset(randomElectionTimeout())
+		rf.setElectionTime()
 	} else {
 		reply.VoteGranted = false
 	}

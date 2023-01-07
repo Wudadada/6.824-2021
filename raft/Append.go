@@ -7,7 +7,6 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 	defer rf.unlock("AppendEntries")
 	if args.Term < rf.currentTerm {
 		reply.Success = false
-		reply.Term = rf.currentTerm
 		return
 	}
 	if args.Term > rf.currentTerm {
@@ -19,7 +18,8 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 		rf.state = FOLLOWER
 	}
 	Debug(dLog, "S%d receive AppendEntries and reset electionTimer in T%d", rf.me, rf.currentTerm)
-	rf.electionTimer.Reset(randomElectionTimeout())
+	rf.setElectionTime()
+
 	if args.PrevLogIndex > rf.LastLogIndex() || args.PrevLogIndex > 0 && rf.logs[args.PrevLogIndex].Term != args.PrevLogTerm {
 		// Reply false if log doesn't contain an entry at prevLogIndex whose term matches prevLogTerm
 		reply.Success = false
@@ -54,7 +54,7 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 	if args.LeaderCommit > rf.commitIndex {
 		// If leaderCommit > commitIndex, set commitIndex = min(leaderCommit, index of last new entry)
 		rf.commitIndex = min(args.LeaderCommit, len(rf.logs))
-		go func() { rf.applierCh <- struct{}{} }()
+		rf.applyCond.Broadcast()
 	}
 
 	reply.Success = true
@@ -157,5 +157,5 @@ func (rf *Raft) advanceCommitL() {
 			rf.commitIndex = index
 		}
 	}
-	go func() { rf.applierCh <- struct{}{} }()
+	rf.applyCond.Broadcast()
 }

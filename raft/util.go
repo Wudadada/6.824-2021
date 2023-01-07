@@ -12,7 +12,7 @@ func StableHeartBeatTimeOut() time.Duration { //固定返回100毫秒
 
 func randomElectionTimeout() time.Duration {
 	rand.Seed(time.Now().UnixNano())
-	return time.Duration(rand.Intn(200)+500) * time.Millisecond //从毫秒区间[500,700]中随机选取
+	return time.Duration(200+rand.Intn(201)) * time.Millisecond
 }
 
 func (rf *Raft) LastLog() LogEntry {
@@ -48,7 +48,6 @@ func (rf *Raft) newTermL(term int) {
 	rf.currentTerm = term
 	rf.votedFor = -1
 	rf.state = FOLLOWER
-	rf.electionTimer.Reset(randomElectionTimeout())
 	rf.persist()
 }
 

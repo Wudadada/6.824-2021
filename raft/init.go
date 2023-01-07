@@ -12,6 +12,8 @@ const (
 	FOLLOWER
 )
 
+const electionTimeout = 300 * time.Millisecond
+
 // as each Raft peer becomes aware that successive log entries are
 // committed, the peer should send an ApplyMsg to the service (or
 // tester) on the same server, via the applyCh passed to Make(). set
@@ -44,18 +46,17 @@ type Raft struct {
 	// Your data here (2A, 2B, 2C).
 	// Look at the paper's Figure 2 for a description of what
 	// state a Raft server must maintain.
-	currentTerm    int
-	votedFor       int
-	state          int   //0:leader 1: candidata 2: Follower
-	lastApplied    int   //已经被应用到状态机的最高的日志条目的索引
-	commitIndex    int   //已知已提交的最高的日志条目的索引
-	nextIndex      []int //nextIndex[i] represent the next index of entry that need to sync to peer[i]
-	matchIndex     []int //matchIndex[i] represents the highest index that has been successsfully repicated in peer[i]
-	logs           []LogEntry
-	applierCh      chan struct{}
-	applyCh        chan ApplyMsg
-	electionTimer  *time.Timer
-	heartbeatTimer *time.Timer
+	currentTerm  int
+	votedFor     int
+	state        int   //0:leader 1: candidata 2: Follower
+	lastApplied  int   //已经被应用到状态机的最高的日志条目的索引
+	commitIndex  int   //已知已提交的最高的日志条目的索引
+	nextIndex    []int //nextIndex[i] represent the next index of entry that need to sync to peer[i]
+	matchIndex   []int //matchIndex[i] represents the highest index that has been successsfully repicated in peer[i]
+	logs         []LogEntry
+	applyCh      chan ApplyMsg
+	applyCond    *sync.Cond
+	electionTime time.Time
 }
 
 // the service or tester wants to create a Raft server. the ports
@@ -70,26 +71,24 @@ type Raft struct {
 func Make(peers []*labrpc.ClientEnd, me int,
 	persister *Persister, applyCh chan ApplyMsg) *Raft {
 	rf := &Raft{
-		peers:          peers,
-		persister:      persister,
-		me:             me,
-		currentTerm:    0,
-		votedFor:       -1,
-		dead:           0,
-		lastApplied:    0,
-		commitIndex:    0,
-		nextIndex:      make([]int, len(peers)),
-		matchIndex:     make([]int, len(peers)),
-		logs:           make([]LogEntry, 0),
-		applyCh:        applyCh,
-		applierCh:      make(chan struct{}),
-		state:          FOLLOWER,
-		heartbeatTimer: time.NewTimer(StableHeartBeatTimeOut()),
-		electionTimer:  time.NewTimer(randomElectionTimeout()),
+		peers:       peers,
+		persister:   persister,
+		me:          me,
+		currentTerm: 0,
+		votedFor:    -1,
+		dead:        0,
+		lastApplied: 0,
+		commitIndex: 0,
+		nextIndex:   make([]int, len(peers)),
+		matchIndex:  make([]int, len(peers)),
+		logs:        make([]LogEntry, 0),
+		applyCh:     applyCh,
+		state:       FOLLOWER,
 	}
+	rf.setElectionTime()
+	rf.applyCond = sync.NewCond(&rf.mu)
 	rf.logs = append(rf.logs,
 		LogEntry{
-			Index:   0,
 			Term:    0,
 			Command: nil,
 		},
@@ -142,7 +141,6 @@ type AppendEntriesReply struct {
 }
 
 type LogEntry struct {
-	Index   int
 	Term    int
 	Command interface{}
 }
@@ -176,7 +174,6 @@ func (rf *Raft) Start(command interface{}) (int, int, bool) {
 	index := len(rf.logs)
 	rf.logs = append(rf.logs,
 		LogEntry{
-			Index:   index,
 			Term:    term,
 			Command: command,
 		},
