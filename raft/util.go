@@ -1,19 +1,8 @@
 package raft
 
 import (
-	"math/rand"
 	"sync/atomic"
-	"time"
 )
-
-func StableHeartBeatTimeOut() time.Duration { //固定返回100毫秒
-	return time.Duration(1e8) //100ms
-}
-
-func randomElectionTimeout() time.Duration {
-	rand.Seed(time.Now().UnixNano())
-	return time.Duration(200+rand.Intn(201)) * time.Millisecond
-}
 
 func (rf *Raft) LastLog() LogEntry {
 	return rf.logs[len(rf.logs)-1]
