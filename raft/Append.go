@@ -63,6 +63,9 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 
 func (rf *Raft) sendAppendsL(heartBeat bool) {
 	for i, _ := range rf.peers {
+		if rf.state != LEADER {
+			return
+		}
 		if i != rf.me {
 			if rf.LastLogIndex() > rf.nextIndex[i] || heartBeat {
 				rf.sendAppendL(i)
@@ -88,6 +91,9 @@ func (rf *Raft) sendAppendL(peer int) {
 		if ok {
 			rf.lock("sendAppendL")
 			defer rf.unlock("sendAppendL")
+			if rf.currentTerm != args.Term || rf.state != LEADER {
+				return
+			}
 			rf.processAppendReplyL(peer, args, &reply)
 		}
 	}()

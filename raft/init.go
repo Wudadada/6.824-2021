@@ -71,19 +71,18 @@ type Raft struct {
 func Make(peers []*labrpc.ClientEnd, me int,
 	persister *Persister, applyCh chan ApplyMsg) *Raft {
 	rf := &Raft{
-		peers:       peers,
-		persister:   persister,
-		me:          me,
-		currentTerm: 0,
-		votedFor:    -1,
-		dead:        0,
-		lastApplied: 0,
-		commitIndex: 0,
-		nextIndex:   make([]int, len(peers)),
-		matchIndex:  make([]int, len(peers)),
-		logs:        make([]LogEntry, 0),
-		applyCh:     applyCh,
-		state:       FOLLOWER,
+		peers:     peers,
+		persister: persister,
+		me:        me,
+
+		votedFor: -1,
+		dead:     0,
+
+		nextIndex:  make([]int, len(peers)),
+		matchIndex: make([]int, len(peers)),
+		logs:       make([]LogEntry, 0),
+		applyCh:    applyCh,
+		state:      FOLLOWER,
 	}
 	rf.setElectionTime()
 	rf.applyCond = sync.NewCond(&rf.mu)
@@ -97,7 +96,7 @@ func Make(peers []*labrpc.ClientEnd, me int,
 	rf.readPersist(persister.ReadRaftState())
 
 	for i := 0; i < len(peers); i++ {
-		rf.matchIndex[i], rf.nextIndex[i] = 0, 1
+		rf.matchIndex[i], rf.nextIndex[i] = 0, len(rf.logs)
 	}
 
 	go rf.ticker()

@@ -43,8 +43,6 @@ func (rf *Raft) tick() {
 	rf.lock("tick")
 	defer rf.unlock("tick")
 
-	Debug(dLog, "S%d tick in T%d", rf.me, rf.currentTerm)
-
 	if rf.state == LEADER {
 		Debug(dLeader, "S%d reset election time and send heart beat in T%d", rf.me, rf.currentTerm)
 		rf.setElectionTime()
@@ -52,6 +50,7 @@ func (rf *Raft) tick() {
 	}
 	if time.Now().After(rf.electionTime) {
 		rf.setElectionTime()
+		Debug(dLog, "S%d reset election time and start election in T%d", rf.me, rf.currentTerm+1)
 		rf.startElectionL()
 	}
 }
@@ -90,66 +89,8 @@ func (rf *Raft) applier() {
 		} else {
 			rf.applyCond.Wait()
 		}
-		time.Sleep(10 * time.Millisecond)
 	}
 }
-
-// The ticker go routine starts a new election if this peer hasn't received
-// heartsbeats recently.
-/*func (rf *Raft) ticker() {
-	for rf.killed() == false {
-		select {
-		case <-rf.electionTimer.C:
-			rf.lock("ticker electionTimer")
-			if rf.state == LEADER {
-				rf.mu.Unlock()
-				break
-			}
-			Debug(dVote, "S%d become candidate in T%d", rf.me, rf.currentTerm)
-			rf.state = CANDIDATE
-			rf.startElectionL()
-			rf.unlock("ticker electionTimer")
-		case <-rf.heartbeatTimer.C:
-			rf.lock("ticker heartBeat")
-			if rf.state == LEADER {
-				Debug(dLeader, "S%d heartbeatTimer and begin Boardcastheartbeat in T%d and reset heartbeat timer", rf.me, rf.currentTerm)
-				rf.sendAppendsL(true)
-				rf.heartbeatTimer.Reset(StableHeartBeatTimeOut())
-			}
-			rf.unlock("ticker heartBeat")
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-}
-
-func (rf *Raft) applier() {
-	for rf.killed() == false {
-		select {
-		case <-rf.applierCh:
-			Debug(dDrop, "S%d applierCh in T%d", rf.me, rf.currentTerm)
-			rf.lock("applier")
-			if rf.lastApplied >= rf.commitIndex {
-				rf.unlock("applier")
-				break
-			}
-			lastApplied := rf.lastApplied
-			entries := append([]LogEntry{}, rf.logs[lastApplied+1:rf.commitIndex+1]...)
-			rf.lastApplied = rf.commitIndex
-			rf.unlock("applier")
-
-			for i, entry := range entries {
-				command := entry.Command
-				rf.applyCh <- ApplyMsg{
-					CommandValid: true,
-					Command:      command,
-					CommandIndex: lastApplied + i + 1,
-				}
-				Debug(dDrop, "S%d, apply log, log term=%v, log command=%v", rf.me, entry.Term, command)
-			}
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-}*/
 
 // return currentTerm and whether this server
 // believes it is the leader.

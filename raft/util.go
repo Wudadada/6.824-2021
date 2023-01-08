@@ -12,6 +12,10 @@ func (rf *Raft) LastLogIndex() int {
 	return len(rf.logs) - 1
 }
 
+func mkLogEmpty() []LogEntry {
+	return make([]LogEntry, 1)
+}
+
 func (rf *Raft) lock(where string) {
 	//Debug(dLock, "S%d locked %s", rf.me, where)
 	rf.mu.Lock()
@@ -69,3 +73,5 @@ func (rf *Raft) Kill() {
 		}
 	}()
 */
+
+// python3 dstest.py xx -p 100 -n 100  -v
