@@ -1,7 +1,7 @@
 package raft
 
 func (rf *Raft) requestVotesL() {
-	args := &RequestVoteArgs{rf.currentTerm, rf.me, rf.LastLogIndex(), rf.logs[rf.LastLogIndex()].Term}
+	args := &RequestVoteArgs{rf.currentTerm, rf.me, rf.lastindex(), rf.lastentry().Term}
 	votes := 1
 	for i, _ := range rf.peers {
 		if rf.state != CANDIDATE {
@@ -45,7 +45,7 @@ func (rf *Raft) becomeLeaderL() {
 	Debug(dLeader, "S%d becomeLeader in T%v", rf.me, rf.currentTerm)
 	rf.state = LEADER
 	for i := range rf.nextIndex {
-		rf.nextIndex[i] = rf.LastLogIndex() + 1
+		rf.nextIndex[i] = rf.lastindex() + 1
 	}
 }
 
@@ -69,8 +69,8 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 		rf.newTermL(args.Term)
 	}
 
-	myIndex := rf.LastLogIndex()
-	myTerm := rf.logs[myIndex].Term
+	myIndex := rf.lastindex()
+	myTerm := rf.entry(myIndex).Term
 	uptodate := (args.LastLogTerm == myTerm && args.LastLogIndex >= myIndex) || args.LastLogTerm > myTerm
 
 	Debug(dLog, "S%d RequestVote args%v reply%v uptodate:%v (myIndex %v, myTerm %v)", rf.me, args, reply, uptodate, myIndex, myTerm)
@@ -87,4 +87,29 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 		reply.VoteGranted = false
 	}
 	reply.Term = rf.currentTerm
+}
+
+// example RequestVote RPC arguments structure.
+// field names must start with capital letters!
+type RequestVoteArgs struct {
+	// Your data here (2A, 2B).
+	Term         int
+	CandidateID  int
+	LastLogIndex int
+	LastLogTerm  int
+}
+
+// example RequestVote RPC reply structure.
+// field names must start with capital letters!
+type RequestVoteReply struct {
+	// Your data here (2A).
+	Term        int
+	VoteGranted bool
+}
+
+func (rf *Raft) sendRequestVote(server int, args *RequestVoteArgs, reply *RequestVoteReply) bool {
+	//fmt.Println("server[", rf.me, "] send RequestVote to server[", server, "] in term[", rf.currentTerm, "]")
+	//Debug(dVote, "S%d send RequestVote to S% in T%d", rf.me, server, rf.currentTerm)
+	ok := rf.peers[server].Call("Raft.RequestVote", args, reply)
+	return ok
 }

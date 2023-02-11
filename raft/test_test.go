@@ -592,18 +592,21 @@ func TestPersist12C(t *testing.T) {
 
 	cfg.one(11, servers, true)
 
+	Debug(dTest, "1")
 	// crash and re-start all
 	for i := 0; i < servers; i++ {
 		cfg.start1(i, cfg.applier)
 	}
+	Debug(dTest, "2")
 	for i := 0; i < servers; i++ {
 		cfg.disconnect(i)
 		cfg.connect(i)
 	}
-
+	Debug(dTest, "3")
 	cfg.one(12, servers, true)
-
+	Debug(dTest, "4")
 	leader1 := cfg.checkOneLeader()
+	Debug(dTest, "5")
 	cfg.disconnect(leader1)
 	cfg.start1(leader1, cfg.applier)
 	cfg.connect(leader1)
@@ -1014,10 +1017,13 @@ func snapcommon(t *testing.T, name string, disconnect bool, reliable bool, crash
 	cfg := make_config(t, servers, !reliable, true)
 	defer cfg.cleanup()
 
+	Debug(dTest, "111111111111111111111")
 	cfg.begin(name)
 
+	Debug(dTest, "222222222222222222222")
 	cfg.one(rand.Int(), servers, true)
 	leader1 := cfg.checkOneLeader()
+	Debug(dTest, "333333333333333333333")
 
 	for i := 0; i < iters; i++ {
 		victim := (leader1 + 1) % servers
@@ -1031,16 +1037,22 @@ func snapcommon(t *testing.T, name string, disconnect bool, reliable bool, crash
 			cfg.disconnect(victim)
 			cfg.one(rand.Int(), servers-1, true)
 		}
+		Debug(dTest, "4444444444444444444444444")
+
 		if crash {
 			cfg.crash1(victim)
 			cfg.one(rand.Int(), servers-1, true)
 		}
+
+		Debug(dTest, "5555555555555555555555555")
 		// send enough to get a snapshot
 		for i := 0; i < SnapShotInterval+1; i++ {
 			cfg.rafts[sender].Start(rand.Int())
 		}
+		Debug(dTest, "666666666666666666666666")
 		// let applier threads catch up with the Start()'s
 		cfg.one(rand.Int(), servers-1, true)
+		Debug(dTest, "77777777777777777777777777")
 
 		if cfg.LogSize() >= MAXLOGSIZE {
 			cfg.t.Fatalf("Log size too large")
@@ -1048,16 +1060,21 @@ func snapcommon(t *testing.T, name string, disconnect bool, reliable bool, crash
 		if disconnect {
 			// reconnect a follower, who maybe behind and
 			// needs to rceive a snapshot to catch up.
+			Debug(dTest, "gg")
 			cfg.connect(victim)
+			Debug(dTest, "hh")
 			cfg.one(rand.Int(), servers, true)
+			Debug(dTest, "ee")
 			leader1 = cfg.checkOneLeader()
 		}
+		Debug(dTest, "8888888888888888888888888")
 		if crash {
 			cfg.start1(victim, cfg.applierSnap)
 			cfg.connect(victim)
 			cfg.one(rand.Int(), servers, true)
 			leader1 = cfg.checkOneLeader()
 		}
+		Debug(dTest, "8888888888888888888888888")
 	}
 	cfg.end()
 }

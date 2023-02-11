@@ -1,19 +1,71 @@
 package raft
 
 import (
+	"6.824/labgob"
+	"bytes"
+	"math/rand"
 	"sync/atomic"
+	"time"
 )
 
-func (rf *Raft) LastLog() LogEntry {
-	return rf.logs[len(rf.logs)-1]
+type Log []Entry
+
+type Entry struct {
+	Term    int
+	Command interface{}
 }
 
-func (rf *Raft) LastLogIndex() int {
-	return len(rf.logs) - 1
+func (rf *Raft) setElectionTime() {
+	t := time.Now()
+	t = t.Add(electionTimeout)
+	ms := rand.Int63() % 200
+	t = t.Add(time.Duration(ms) * time.Millisecond)
+	rf.electionTime = t
 }
 
-func mkLogEmpty() []LogEntry {
-	return make([]LogEntry, 1)
+func SerilizeState(rf *Raft) []byte {
+	w := new(bytes.Buffer)
+	e := labgob.NewEncoder(w)
+	e.Encode(rf.currentTerm)
+	e.Encode(rf.votedFor)
+	e.Encode(rf.logs)
+	e.Encode(rf.waitingTerm)
+	e.Encode(rf.waitingIndex)
+	return w.Bytes()
+}
+
+// switch real index to log index
+func (rf *Raft) logIndex(realIndex int) int {
+	return realIndex - rf.waitingIndex
+}
+
+// switch log index to real index
+func (rf *Raft) realIndex(logIndex int) int {
+	return logIndex + rf.waitingIndex
+}
+
+func (rf *Raft) mkLogEmpty() {
+	rf.logs = []Entry{{Term: rf.waitingTerm}}
+}
+
+func (rf *Raft) append(e Entry) {
+	rf.logs = append(rf.logs, e)
+}
+
+func (rf *Raft) start() int {
+	return rf.waitingIndex
+}
+
+func (rf *Raft) lastindex() int {
+	return rf.waitingIndex + len(rf.logs) - 1
+}
+
+func (rf *Raft) entry(index int) *Entry {
+	return &(rf.logs[index-rf.waitingIndex])
+}
+
+func (rf *Raft) lastentry() *Entry {
+	return rf.entry(rf.lastindex())
 }
 
 func (rf *Raft) lock(where string) {
@@ -51,6 +103,13 @@ func min(x int, y int) int {
 	return x
 }
 
+func max(x int, y int) int {
+	if x <= y {
+		return y
+	}
+	return x
+}
+
 // the tester doesn't halt goroutines created by Raft after each test,
 // but it does call the Kill() method. your code can use killed() to
 // check whether Kill() has been called. the use of atomic avoids the
@@ -75,3 +134,5 @@ func (rf *Raft) Kill() {
 */
 
 // python3 dstest.py xx -p 100 -n 100  -v
+//python3 dslogs.py 20230125_110814/TestSnapshotInstall2D_0.log -c 3
+//VERBOSE=1 go test -run TestSnapshotInstall2D | python3 dslogs.py -c 3
